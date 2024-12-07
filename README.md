@@ -61,5 +61,3 @@ Ensure the following dependencies are installed in your ROS workspace:
    ```bash
    rosrun rqt_reconfigure rqt_reconfigure
    ```
-</launch>
-```
