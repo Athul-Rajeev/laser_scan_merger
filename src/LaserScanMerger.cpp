@@ -24,12 +24,12 @@ LaserScanMerger::LaserScanMerger()
     m_nh.param<double>("angle_min", m_angleMin, -M_PI);
     m_nh.param<double>("angle_max", m_angleMax, M_PI);
 
-    // Initialize message filters subscribers (use pointers)
-    m_scanSub1 = new message_filters::Subscriber<sensor_msgs::LaserScan>(m_nh, m_scanTopic1, 1);
-    m_scanSub2 = new message_filters::Subscriber<sensor_msgs::LaserScan>(m_nh, m_scanTopic2, 1);
+    // Initialize subscribers
+    m_scanSub1.subscribe(m_nh, m_scanTopic1, 1);
+    m_scanSub2.subscribe(m_nh, m_scanTopic2, 1);
 
-    // Set up TimeSynchronizer with 10 message queue size
-    m_sync.reset(new message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan>(*m_scanSub1, *m_scanSub2, 10));
+    // Synchronize the messages
+    m_sync = new message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan>(m_scanSub1, m_scanSub2, 10);
     m_sync->registerCallback(boost::bind(&LaserScanMerger::scanCallback, this, _1, _2));
 
     // Initialize publishers
@@ -43,18 +43,17 @@ LaserScanMerger::LaserScanMerger()
 }
 
 /**
- * @brief Callback to process LaserScan data from the first/second topic.
- * @param scan_msg LaserScan message received from the respective topic.
+ * @brief Callback to process LaserScan data from the synchronized topics.
+ * @param scanMsg1 LaserScan message from the first topic.
+ * @param scanMsg2 LaserScan message from the second topic.
  * @return None
  */
 
-void LaserScanMerger::scanCallback(
-    const sensor_msgs::LaserScan::ConstPtr& scan_msg1, 
-    const sensor_msgs::LaserScan::ConstPtr& scan_msg2) {
-    processLaserScan(scan_msg1);
-    processLaserScan(scan_msg2);
+void LaserScanMerger::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg1, const sensor_msgs::LaserScan::ConstPtr& scanMsg2) {
+    // Process both LaserScan messages
+    processLaserScan(scanMsg1);
+    processLaserScan(scanMsg2);
 }
-
 
 /**
  * @brief Processes a LaserScan message, transforms it to the target frame, and merges it into a combined cloud.

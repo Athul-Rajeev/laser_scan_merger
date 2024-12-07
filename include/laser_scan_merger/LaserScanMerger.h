@@ -9,8 +9,6 @@ Description: Merges two LaserScan topics into a combined LaserScan and PointClou
 #pragma once
 
 #include <ros/ros.h>
-#include <message_filters/subscriber.h>
-#include <message_filters/time_synchronizer.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
@@ -22,6 +20,9 @@ Description: Merges two LaserScan topics into a combined LaserScan and PointClou
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <dynamic_reconfigure/server.h>
 #include <laser_scan_merger/ScanMergerConfig.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
+
 
 class LaserScanMerger {
 public:
@@ -31,8 +32,6 @@ public:
 private:
     // ROS node handle, subscribers, publishers
     ros::NodeHandle m_nh;
-    ros::Subscriber m_scanSub1;
-    ros::Subscriber m_scanSub2;
     ros::Publisher m_mergedPointcloudPub;
     ros::Publisher m_mergedScanPub;
 
@@ -55,8 +54,13 @@ private:
     // Combined Point Cloud
     pcl::PointCloud<pcl::PointXYZ> m_combinedCloud;
 
+    // Message Filter Synchronizer
+    message_filters::Subscriber<sensor_msgs::LaserScan> m_scanSub1;
+    message_filters::Subscriber<sensor_msgs::LaserScan> m_scanSub2;
+    message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan> *m_sync;
+
     // Callbacks
-    void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
+    void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg1, const sensor_msgs::LaserScan::ConstPtr& scanMsg2);
     void dynamicReconfigCallback(laser_scan_merger::ScanMergerConfig& config, uint32_t level);
 
     // Helper functions

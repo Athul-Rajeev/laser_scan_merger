@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   tf2_ros
   tf2_sensor_msgs
+  message_filters
   dynamic_reconfigure
 )
 
@@ -15,7 +16,9 @@ generate_dynamic_reconfigure_options(
   cfg/ScanMerger.cfg
 )
 
-catkin_package()
+catkin_package(
+    CATKIN_DEPENDS roscpp sensor_msgs pcl_ros tf2_ros message_filters dynamic_reconfigure
+)
 
 include_directories(
   include
