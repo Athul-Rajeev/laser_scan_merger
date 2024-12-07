@@ -1,6 +1,6 @@
 frame_id: "map"
-scan_topic1: "/scan1"
-scan_topic2: "/scan2"
+scan_topic1: "/f_scan"
+scan_topic2: "/r_scan"
 range_limit: 10.0
 angle_min: -3.14
 angle_max: 3.14
