@@ -54,18 +54,74 @@ void LaserScanMerger::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_
 
 void LaserScanMerger::processLaserScan(const sensor_msgs::LaserScan::ConstPtr& scanMsg) {
     try {
-        sensor_msgs::PointCloud2 cloud;
-        sensor_msgs::PointCloud2 tempCloud;
-        m_projector.projectLaser(*scanMsg, tempCloud);
+        cloud.header.frame_id = scanMsg->header.frame_id;
+        cloud.header.stamp = scanMsg->header.stamp;
+        
+        // Prepare PointCloud2 structure
+        cloud.height = 1;
+        cloud.is_dense = true;
+        cloud.is_bigendian = false;
+        cloud.fields.resize(3);
 
+        // Define PointCloud2 fields
+        cloud.fields[0].name = "x";
+        cloud.fields[0].offset = 0;
+        cloud.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
+        cloud.fields[0].count = 1;
+
+        cloud.fields[1].name = "y";
+        cloud.fields[1].offset = 4;
+        cloud.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
+        cloud.fields[1].count = 1;
+
+        cloud.fields[2].name = "z";
+        cloud.fields[2].offset = 8;
+        cloud.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
+        cloud.fields[2].count = 1;
+
+        cloud.point_step = 12; // 4 bytes for x, y, z (3 * sizeof(float))
+        cloud.row_step = cloud.point_step * scanMsg->ranges.size();
+        cloud.width = scanMsg->ranges.size();
+
+        cloud.data.resize(cloud.row_step);
+
+        // Populate PointCloud2 with data from LaserScan
+        sensor_msgs::PointCloud2Iterator<float> iter_x(cloud, "x");
+        sensor_msgs::PointCloud2Iterator<float> iter_y(cloud, "y");
+        sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
+
+        for (size_t i = 0; i < scanMsg->ranges.size(); ++i) {
+            float range = scanMsg->ranges[i];
+
+            if (range >= scanMsg->range_min && range <= scanMsg->range_max) {
+                float angle = scanMsg->angle_min + i * scanMsg->angle_increment;
+                *iter_x = range * cos(angle);
+                *iter_y = range * sin(angle);
+                *iter_z = 0.0; // LaserScan is 2D; z = 0
+            } else {
+                *iter_x = std::numeric_limits<float>::quiet_NaN();
+                *iter_y = std::numeric_limits<float>::quiet_NaN();
+                *iter_z = std::numeric_limits<float>::quiet_NaN();
+            }
+
+            ++iter_x;
+            ++iter_y;
+            ++iter_z;
+        }
+
+        // Transform to desired frame
+        sensor_msgs::PointCloud2 transformedCloud;
         geometry_msgs::TransformStamped transform = 
             m_tfBuffer.lookupTransform(m_frameId, scanMsg->header.frame_id, ros::Time(0));
-        tf2::doTransform(tempCloud, cloud, transform);
+        tf2::doTransform(cloud, transformedCloud, transform);
 
+        // Convert to PCL for further processing
         pcl::PointCloud<pcl::PointXYZ> pclCloud;
-        pcl::fromROSMsg(cloud, pclCloud);
+        pcl::fromROSMsg(transformedCloud, pclCloud);
 
+        // Merge with the combined cloud
         m_combinedCloud += pclCloud;
+
     } catch (tf2::TransformException& ex) {
         ROS_WARN_THROTTLE(1.0, "Transform error: %s", ex.what());
     }

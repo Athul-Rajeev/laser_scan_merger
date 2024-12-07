@@ -6,13 +6,12 @@ Version: 1.0
 Description: Merges two LaserScan topics into a combined LaserScan and PointCloud2 output.
 */
 
-#ifndef LASER_SCAN_MERGER_H
-#define LASER_SCAN_MERGER_H
+#pragma once
 
 #include <ros/ros.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <laser_geometry/laser_geometry.h>
+#include <sensor_msgs/point_cloud2_iterator.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -36,9 +35,9 @@ private:
     ros::Publisher m_mergedScanPub;
 
     // Laser Projection and TF
-    laser_geometry::LaserProjection m_projector;
     tf2_ros::Buffer m_tfBuffer;
     tf2_ros::TransformListener m_tfListener;
+    sensor_msgs::PointCloud2 cloud;
 
     // Dynamic Reconfigure Server
     dynamic_reconfigure::Server<laser_scan_merger::ScanMergerConfig> m_dynServer;
@@ -64,4 +63,3 @@ private:
     void convertPointCloudToLaserScan(const pcl::PointCloud<pcl::PointXYZ>& cloud, sensor_msgs::LaserScan& scan);
 };
 
-#endif // LASER_SCAN_MERGER_H
