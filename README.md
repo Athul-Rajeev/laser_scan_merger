@@ -63,5 +63,3 @@ Ensure the following dependencies are installed in your ROS workspace:
    ```
 </launch>
 ```
-
----
