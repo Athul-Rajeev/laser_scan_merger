@@ -35,7 +35,7 @@ sudo apt-get install ros-noetic-tf2-sensor-msgs
 1. Clone this repository into your catkin workspace:
    ```bash
    cd ~/catkin_ws/src
-   git clone https://github.com/your_username/laser_scan_merger.git
+   git clone https://github.com/Athul-Rajeev/laser_scan_merger.git
    ```
 
 2. Navigate back to your workspace and build the package:
