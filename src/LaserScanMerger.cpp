@@ -61,9 +61,10 @@ void LaserScanMerger::processLaserScan(const sensor_msgs::LaserScan::ConstPtr& s
         cloud.height = 1;
         cloud.is_dense = true;
         cloud.is_bigendian = false;
-        cloud.fields.resize(3);
 
         // Define PointCloud2 fields
+        cloud.fields.resize(4); // Add 1 more field for intensity
+
         cloud.fields[0].name = "x";
         cloud.fields[0].offset = 0;
         cloud.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
@@ -79,34 +80,47 @@ void LaserScanMerger::processLaserScan(const sensor_msgs::LaserScan::ConstPtr& s
         cloud.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
         cloud.fields[2].count = 1;
 
-        cloud.point_step = 12; // 4 bytes for x, y, z (3 * sizeof(float))
+        cloud.fields[3].name = "intensity";
+        cloud.fields[3].offset = 12;
+        cloud.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
+        cloud.fields[3].count = 1;
+
+        cloud.point_step = 16;  // 4 bytes for x, 4 for y, 4 for z, 4 for intensity (3 * sizeof(float) + 1 * sizeof(float))
         cloud.row_step = cloud.point_step * scanMsg->ranges.size();
         cloud.width = scanMsg->ranges.size();
-
+        cloud.height = 1;
         cloud.data.resize(cloud.row_step);
 
         // Populate PointCloud2 with data from LaserScan
         sensor_msgs::PointCloud2Iterator<float> iter_x(cloud, "x");
         sensor_msgs::PointCloud2Iterator<float> iter_y(cloud, "y");
         sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
+        sensor_msgs::PointCloud2Iterator<float> iter_intensity(cloud, "intensity"); // New iterator for intensity
 
         for (size_t i = 0; i < scanMsg->ranges.size(); ++i) {
-            float range = scanMsg->ranges[i];
+        float range = scanMsg->ranges[i];
+        if (range >= scanMsg->range_min && range <= scanMsg->range_max) {
+            float angle = scanMsg->angle_min + i * scanMsg->angle_increment;
+            
+            // Calculate the Cartesian coordinates
+            *iter_x = range * cos(angle);
+            *iter_y = range * sin(angle);
+            *iter_z = 0.0;  // LaserScan is 2D
+            
+            // Add the intensity (it comes directly from the scanMsg)
+            *iter_intensity = scanMsg->intensities[i];
+        } else {
+            // If the range is invalid, set x, y, z, and intensity to NaN
+            *iter_x = std::numeric_limits<float>::quiet_NaN();
+            *iter_y = std::numeric_limits<float>::quiet_NaN();
+            *iter_z = std::numeric_limits<float>::quiet_NaN();
+            *iter_intensity = std::numeric_limits<float>::quiet_NaN();
+        }
 
-            if (range >= scanMsg->range_min && range <= scanMsg->range_max) {
-                float angle = scanMsg->angle_min + i * scanMsg->angle_increment;
-                *iter_x = range * cos(angle);
-                *iter_y = range * sin(angle);
-                *iter_z = 0.0; // LaserScan is 2D; z = 0
-            } else {
-                *iter_x = std::numeric_limits<float>::quiet_NaN();
-                *iter_y = std::numeric_limits<float>::quiet_NaN();
-                *iter_z = std::numeric_limits<float>::quiet_NaN();
-            }
-
-            ++iter_x;
-            ++iter_y;
-            ++iter_z;
+        ++iter_x;
+        ++iter_y;
+        ++iter_z;
+        ++iter_intensity;  // Increment the intensity iterator
         }
 
         // Transform to desired frame
