@@ -63,22 +63,6 @@ Ensure the following dependencies are installed in your ROS workspace:
    ```
 
 ---
-
-## Example Configuration
-
-Here's an example configuration for the `laser_scan_merger.launch` file:
-
-```xml
-<launch>
-    <node pkg="laser_scan_merger" type="laser_scan_merger_node" name="laser_scan_merger">
-        <param name="input_scans" value="['/scan1', '/scan2']" />
-        <param name="output_scan" value="/merged_scan" />
-        <param name="target_frame" value="base_link" />
-        <param name="range_min" value="0.1" />
-        <param name="range_max" value="10.0" />
-        <param name="angle_min" value="-1.57" />
-        <param name="angle_max" value="1.57" />
-    </node>
 </launch>
 ```
 
