@@ -1,4 +1,3 @@
-```markdown
 # Laser Scan Merger
 
 The `laser_scan_merger` is a ROS package designed to merge multiple laser scan topics into a single scan topic, providing a unified representation of the environment. This is useful for robots equipped with multiple laser sensors or for combining overlapping scans in simulation or real-world scenarios.
