@@ -22,12 +22,6 @@ Ensure the following dependencies are installed in your ROS workspace:
 - `tf2_ros`
 - `tf2_sensor_msgs`
 
-To install missing dependencies:
-```bash
-sudo apt-get update
-sudo apt-get install ros-noetic-tf2-sensor-msgs
-```
-
 ---
 
 ## Installation
