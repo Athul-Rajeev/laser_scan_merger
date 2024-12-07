@@ -9,6 +9,8 @@ Description: Merges two LaserScan topics into a combined LaserScan and PointClou
 #pragma once
 
 #include <ros/ros.h>
+#include <message_filters/subscriber.h>
+#include <message_filters/time_synchronizer.h>
 #include <sensor_msgs/LaserScan.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>

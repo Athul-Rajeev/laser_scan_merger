@@ -25,10 +25,14 @@ LaserScanMerger::LaserScanMerger()
     m_nh.param<double>("angle_max", m_angleMax, M_PI);
 
     // Initialize subscribers and publishers
-    m_scanSub1 = m_nh.subscribe(m_scanTopic1, 1, &LaserScanMerger::scanCallback, this);
-    m_scanSub2 = m_nh.subscribe(m_scanTopic2, 1, &LaserScanMerger::scanCallback, this);
+    m_scanSub1 = new message_filters::Subscriber<sensor_msgs::LaserScan>(m_nh, m_scanTopic1, 1);
+    m_scanSub2 = new message_filters::Subscriber<sensor_msgs::LaserScan>(m_nh, m_scanTopic2, 1);
     m_mergedPointcloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("merged_pointcloud", 1);
     m_mergedScanPub = m_nh.advertise<sensor_msgs::LaserScan>("merged_scan", 1);
+
+    // Synchronize the two subscribers
+    m_sync.reset(new message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan>(*m_scanSub1, *m_scanSub2, 10));
+    m_sync->registerCallback(boost::bind(&LaserScanMerger::scanCallback, this, _1, _2));
 
     // Setup dynamic reconfigure
     dynamic_reconfigure::Server<laser_scan_merger::ScanMergerConfig>::CallbackType dynCb;
@@ -42,9 +46,13 @@ LaserScanMerger::LaserScanMerger()
  * @return None
  */
 
-void LaserScanMerger::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scan_msg) {
-    processLaserScan(scan_msg);
+void LaserScanMerger::scanCallback(
+    const sensor_msgs::LaserScan::ConstPtr& scan_msg1, 
+    const sensor_msgs::LaserScan::ConstPtr& scan_msg2) {
+    processLaserScan(scan_msg1);
+    processLaserScan(scan_msg2);
 }
+
 
 /**
  * @brief Processes a LaserScan message, transforms it to the target frame, and merges it into a combined cloud.
