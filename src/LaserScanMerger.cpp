@@ -162,7 +162,7 @@ void LaserScanMerger::publishMergedData() {
     sensor_msgs::PointCloud2 outputCloud;
     pcl::toROSMsg(m_combinedCloud, outputCloud);
     outputCloud.header.frame_id = m_frameId;
-    outputCloud.header.stamp = ros::Time::now();
+    outputCloud.header.stamp = cloud.header.stamp;
     m_mergedPointcloudPub.publish(outputCloud);
 
     sensor_msgs::LaserScan mergedScan;
@@ -182,7 +182,7 @@ void LaserScanMerger::publishMergedData() {
 void LaserScanMerger::convertPointCloudToLaserScan(
     const pcl::PointCloud<pcl::PointXYZI>& cloud, sensor_msgs::LaserScan& scan) {
     scan.header.frame_id = m_frameId;
-    scan.header.stamp = ros::Time::now();
+    scan.header.stamp = ros::Time(cloud.header.stamp);
     scan.angle_min = m_angleMin;
     scan.angle_max = m_angleMax;
 
