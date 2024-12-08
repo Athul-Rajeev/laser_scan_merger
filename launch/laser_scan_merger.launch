@@ -1,0 +1,7 @@
+<launch>
+    <!-- Load the YAML file into the parameter server -->
+    <rosparam file="$(find laser_scan_merger)/config/params.yaml" command="load" />
+    
+    <!-- Launch the LaserScanMerger node -->
+    <node pkg="laser_scan_merger" type="laser_scan_merger_node" name="laser_scan_merger" output="screen" />
+</launch>

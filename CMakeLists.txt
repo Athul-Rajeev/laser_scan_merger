@@ -22,6 +22,7 @@ catkin_package(
 
 include_directories(
   include
+  config
   include/laser_scan_merger
   ${catkin_INCLUDE_DIRS}
 )
