@@ -55,6 +55,3 @@ Ensure the following dependencies are installed in your ROS workspace:
    - `target_frame`: The frame into which all scans will be transformed.
    - `range_min` and `range_max`: Minimum and maximum range limits for the merged scan.
    - `angle_min` and `angle_max`: Angular bounds for the output scan.
-
-3. **Dynamic Reconfigure:**
-   Use the `dynamic_reconfigure` interface to modify parameters at runtime.
