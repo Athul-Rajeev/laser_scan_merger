@@ -22,6 +22,7 @@ Description: Merges two LaserScan topics into a combined LaserScan and PointClou
 #include <laser_scan_merger/ScanMergerConfig.h>
 #include <message_filters/subscriber.h>
 #include <message_filters/time_synchronizer.h>
+#include <message_filters/sync_policies/approximate_time.h>
 
 
 class LaserScanMerger {
@@ -57,7 +58,8 @@ private:
     // Message Filter Synchronizer
     message_filters::Subscriber<sensor_msgs::LaserScan> m_scanSub1;
     message_filters::Subscriber<sensor_msgs::LaserScan> m_scanSub2;
-    message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan> *m_sync;
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::LaserScan, sensor_msgs::LaserScan> SyncPolicy;
+    message_filters::Synchronizer<SyncPolicy> *m_sync;
 
     // Callbacks
     void scanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg1, const sensor_msgs::LaserScan::ConstPtr& scanMsg2);

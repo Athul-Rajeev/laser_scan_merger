@@ -29,7 +29,7 @@ LaserScanMerger::LaserScanMerger()
     m_scanSub2.subscribe(m_nh, m_scanTopic2, 1);
 
     // Synchronize the messages
-    m_sync = new message_filters::TimeSynchronizer<sensor_msgs::LaserScan, sensor_msgs::LaserScan>(m_scanSub1, m_scanSub2, 10);
+    m_sync = new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(10), m_scanSub1, m_scanSub2);
     m_sync->registerCallback(boost::bind(&LaserScanMerger::scanCallback, this, _1, _2));
 
     // Initialize publishers
