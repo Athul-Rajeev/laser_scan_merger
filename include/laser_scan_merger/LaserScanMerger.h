@@ -53,7 +53,7 @@ private:
     double m_angleMax;
 
     // Combined Point Cloud
-    pcl::PointCloud<pcl::PointXYZ> m_combinedCloud;
+    pcl::PointCloud<pcl::PointXYZI> m_combinedCloud;
 
     // Message Filter Synchronizer
     message_filters::Subscriber<sensor_msgs::LaserScan> m_scanSub1;
@@ -68,6 +68,6 @@ private:
     // Helper functions
     void processLaserScan(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
     void publishMergedData();
-    void convertPointCloudToLaserScan(const pcl::PointCloud<pcl::PointXYZ>& cloud, sensor_msgs::LaserScan& scan);
+    void convertPointCloudToLaserScan(const pcl::PointCloud<pcl::PointXYZI>& cloud, sensor_msgs::LaserScan& scan);
 };
 

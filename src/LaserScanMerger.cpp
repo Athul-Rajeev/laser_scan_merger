@@ -17,7 +17,7 @@ Description: Implementation file for LaserScanMerger class.
 LaserScanMerger::LaserScanMerger() 
     : m_nh("~"), m_tfListener(m_tfBuffer) {
     // Load parameters from YAML
-    m_nh.param<std::string>("frame_id", m_frameId, "map");
+    m_nh.param<std::string>("frame_id", m_frameId, "base_link");
     m_nh.param<std::string>("scan_topic1", m_scanTopic1, "/scan1");
     m_nh.param<std::string>("scan_topic2", m_scanTopic2, "/scan2");
     m_nh.param<double>("range_limit", m_rangeLimit, 10.0);
@@ -135,11 +135,11 @@ void LaserScanMerger::processLaserScan(const sensor_msgs::LaserScan::ConstPtr& s
         // Transform to desired frame
         sensor_msgs::PointCloud2 transformedCloud;
         geometry_msgs::TransformStamped transform = 
-            m_tfBuffer.lookupTransform(m_frameId, scanMsg->header.frame_id, ros::Time(0));
+            m_tfBuffer.lookupTransform(m_frameId, scanMsg->header.frame_id, scanMsg->header.stamp);
         tf2::doTransform(cloud, transformedCloud, transform);
 
         // Convert to PCL for further processing
-        pcl::PointCloud<pcl::PointXYZ> pclCloud;
+        pcl::PointCloud<pcl::PointXYZI> pclCloud;
         pcl::fromROSMsg(transformedCloud, pclCloud);
 
         // Merge with the combined cloud
@@ -180,25 +180,36 @@ void LaserScanMerger::publishMergedData() {
  */
 
 void LaserScanMerger::convertPointCloudToLaserScan(
-    const pcl::PointCloud<pcl::PointXYZ>& cloud, sensor_msgs::LaserScan& scan) {
+    const pcl::PointCloud<pcl::PointXYZI>& cloud, sensor_msgs::LaserScan& scan) {
     scan.header.frame_id = m_frameId;
     scan.header.stamp = ros::Time::now();
     scan.angle_min = m_angleMin;
     scan.angle_max = m_angleMax;
-    scan.angle_increment = (m_angleMax - m_angleMin) / 360.0;
+
+    // Angle increment based on the total range and the number of points
+    scan.angle_increment = (m_angleMax - m_angleMin) / static_cast<float>(cloud.width);
     scan.range_min = 0.1;
     scan.range_max = m_rangeLimit;
-    scan.ranges.resize(360, std::numeric_limits<float>::infinity());
+    scan.ranges.resize(cloud.width, std::numeric_limits<float>::infinity());
 
     for (const auto& point : cloud) {
-        double angle = atan2(point.y, point.x);
-        if (angle < m_angleMin || angle > m_angleMax) continue;
+        double angle = atan2(point.y, point.x); // Angle in radians
 
-        double range = hypot(point.x, point.y);
-        if (range < scan.range_min || range > scan.range_max) continue;
+        if (angle < m_angleMin || angle > m_angleMax) {
+            continue; // Skip points outside the scan range
+        }
 
+        double range = hypot(point.x, point.y); // Calculate range from point cloud
+
+        if (range < scan.range_min || range > scan.range_max) {
+            continue; // Skip points outside of the valid range
+        }
+
+        // Calculate the index for this point's range based on its angle
         int index = static_cast<int>((angle - m_angleMin) / scan.angle_increment);
-        if (index >= 0 && index < 360) {
+
+        // Ensure the index is within bounds
+        if (index >= 0 && index < scan.ranges.size()) {
             scan.ranges[index] = std::min(scan.ranges[index], static_cast<float>(range));
         }
     }
