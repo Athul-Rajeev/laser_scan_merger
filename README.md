@@ -57,7 +57,4 @@ Ensure the following dependencies are installed in your ROS workspace:
    - `angle_min` and `angle_max`: Angular bounds for the output scan.
 
 3. **Dynamic Reconfigure:**
-   Use the `dynamic_reconfigure` interface to modify parameters at runtime:
-   ```bash
-   rosrun rqt_reconfigure rqt_reconfigure
-   ```
+   Use the `dynamic_reconfigure` interface to modify parameters at runtime.
