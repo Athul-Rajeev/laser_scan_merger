@@ -25,12 +25,11 @@ LaserScanMerger::LaserScanMerger()
     m_nh.param<double>("angle_max", m_angleMax, M_PI);
 
     // Initialize subscribers
-    m_scanSub1.subscribe(m_nh, m_scanTopic1, 1);
-    m_scanSub2.subscribe(m_nh, m_scanTopic2, 1);
+    // m_scanSub1.subscribe(m_nh, m_scanTopic1, 1);
+    // m_scanSub2.subscribe(m_nh, m_scanTopic2, 1);
 
-    // Synchronize the messages
-    m_sync = new message_filters::Synchronizer<SyncPolicy>(SyncPolicy(10), m_scanSub1, m_scanSub2);
-    m_sync->registerCallback(boost::bind(&LaserScanMerger::scanCallback, this, _1, _2));
+    m_scanSub1 = m_nh.subscribe(m_scanTopic1, 1, &LaserScanMerger::scanCallback1, this);
+    m_scanSub2 = m_nh.subscribe(m_scanTopic2, 1, &LaserScanMerger::scanCallback2, this);
 
     // Initialize publishers
     m_mergedPointcloudPub = m_nh.advertise<sensor_msgs::PointCloud2>("merged_pointcloud", 1);
@@ -49,106 +48,115 @@ LaserScanMerger::LaserScanMerger()
  * @return None
  */
 
-void LaserScanMerger::scanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg1, const sensor_msgs::LaserScan::ConstPtr& scanMsg2) {
-    // Process both LaserScan messages
-    processLaserScan(scanMsg1);
-    processLaserScan(scanMsg2);
+void LaserScanMerger::scanCallback1(const sensor_msgs::LaserScan::ConstPtr& scanMsg1) {
+    std::lock_guard<std::mutex> lock(dataMutex);
+
+    // Store the latest scan from topic1
+    lastScan1 = scanMsg1;
+
+    // Try to synchronize with the latest scan from topic2
+    if (lastScan2) {
+        double timeDiff = std::abs((lastScan1->header.stamp - lastScan2->header.stamp).toSec());
+        const double syncThreshold = 0.1; // Adjust threshold as needed
+
+        if (timeDiff <= syncThreshold) {
+            // Messages are synchronized; process them
+            processLaserScan(lastScan1);
+            processLaserScan(lastScan2);
+
+            // Reset both messages after processing
+            lastScan1.reset();
+            lastScan2.reset();
+        }
+    }
 }
 
-/**
+void LaserScanMerger::scanCallback2(const sensor_msgs::LaserScan::ConstPtr& scanMsg2) {
+    std::lock_guard<std::mutex> lock(dataMutex);
+
+    // Store the latest scan from topic2
+    lastScan2 = scanMsg2;
+
+    // Try to synchronize with the latest scan from topic1
+    if (lastScan1) {
+        double timeDiff = std::abs((lastScan1->header.stamp - lastScan2->header.stamp).toSec());
+        const double syncThreshold = 0.1; // Adjust threshold as needed
+
+        if (timeDiff <= syncThreshold) {
+            // Messages are synchronized; process them
+            processLaserScan(lastScan1);
+            processLaserScan(lastScan2);
+
+            // Reset both messages after processing
+            lastScan1.reset();
+            lastScan2.reset();
+        }
+    }
+}
+
+/**        // Prepare a PCL PointCloud directly
  * @brief Processes a LaserScan message, transforms it to the target frame, and merges it into a combined cloud.
  * @param scan_msg LaserScan message to process.
  * @return None
  */
 
 void LaserScanMerger::processLaserScan(const sensor_msgs::LaserScan::ConstPtr& scanMsg) {
-    try {
-        cloud.header.frame_id = scanMsg->header.frame_id;
-        cloud.header.stamp = scanMsg->header.stamp;
-        
-        // Prepare PointCloud2 structure
-        cloud.height = 1;
-        cloud.is_dense = true;
-        cloud.is_bigendian = false;
+    // Prepare a point cloud
+    pcl::PointCloud<pcl::PointXYZI> pclCloud;
+    pclCloud.header.frame_id = scanMsg->header.frame_id;
+    pclCloud.header.stamp = pcl_conversions::toPCL(scanMsg->header.stamp);
+    pclCloud.is_dense = false;
 
-        // Define PointCloud2 fields
-        cloud.fields.resize(4); // Add 1 more field for intensity
+    // Reserve space for points (reduces dynamic resizing during population)
+    pclCloud.points.reserve(scanMsg->ranges.size());
 
-        cloud.fields[0].name = "x";
-        cloud.fields[0].offset = 0;
-        cloud.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
-        cloud.fields[0].count = 1;
+    // Precompute angle values for each index to avoid repetitive calculations
+    std::vector<float> precomputed_angles(scanMsg->ranges.size());
+    for (size_t i = 0; i < scanMsg->ranges.size(); ++i) {
+        precomputed_angles[i] = scanMsg->angle_min + i * scanMsg->angle_increment;
+    }
 
-        cloud.fields[1].name = "y";
-        cloud.fields[1].offset = 4;
-        cloud.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
-        cloud.fields[1].count = 1;
-
-        cloud.fields[2].name = "z";
-        cloud.fields[2].offset = 8;
-        cloud.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
-        cloud.fields[2].count = 1;
-
-        cloud.fields[3].name = "intensity";
-        cloud.fields[3].offset = 12;
-        cloud.fields[3].datatype = sensor_msgs::PointField::FLOAT32;
-        cloud.fields[3].count = 1;
-
-        cloud.point_step = 16;  // 4 bytes for x, 4 for y, 4 for z, 4 for intensity (3 * sizeof(float) + 1 * sizeof(float))
-        cloud.row_step = cloud.point_step * scanMsg->ranges.size();
-        cloud.width = scanMsg->ranges.size();
-        cloud.height = 1;
-        cloud.data.resize(cloud.row_step);
-
-        // Populate PointCloud2 with data from LaserScan
-        sensor_msgs::PointCloud2Iterator<float> iter_x(cloud, "x");
-        sensor_msgs::PointCloud2Iterator<float> iter_y(cloud, "y");
-        sensor_msgs::PointCloud2Iterator<float> iter_z(cloud, "z");
-        sensor_msgs::PointCloud2Iterator<float> iter_intensity(cloud, "intensity"); // New iterator for intensity
-
-        for (size_t i = 0; i < scanMsg->ranges.size(); ++i) {
+    // Populate the PCL PointCloud
+    for (size_t i = 0; i < scanMsg->ranges.size(); ++i) {
         float range = scanMsg->ranges[i];
-        if (range >= scanMsg->range_min && range <= scanMsg->range_max) {
-            float angle = scanMsg->angle_min + i * scanMsg->angle_increment;
-            
-            // Calculate the Cartesian coordinates
-            *iter_x = range * cos(angle);
-            *iter_y = range * sin(angle);
-            *iter_z = 0.0;  // LaserScan is 2D
-            
-            // Add the intensity (it comes directly from the scanMsg)
-            *iter_intensity = scanMsg->intensities[i];
-        } else {
-            // If the range is invalid, set x, y, z, and intensity to NaN
-            *iter_x = std::numeric_limits<float>::quiet_NaN();
-            *iter_y = std::numeric_limits<float>::quiet_NaN();
-            *iter_z = std::numeric_limits<float>::quiet_NaN();
-            *iter_intensity = std::numeric_limits<float>::quiet_NaN();
+        float intensity = (i < scanMsg->intensities.size()) ? scanMsg->intensities[i] : 0.0f;
+
+        // Skip invalid ranges early to avoid unnecessary computation
+        if (range < scanMsg->range_min || range > scanMsg->range_max) {
+            continue;
         }
 
-        ++iter_x;
-        ++iter_y;
-        ++iter_z;
-        ++iter_intensity;  // Increment the intensity iterator
-        }
+        // Compute Cartesian coordinates
+        float angle = precomputed_angles[i];
+        float x = range * cos(angle);
+        float y = range * sin(angle);
 
-        // Transform to desired frame
-        sensor_msgs::PointCloud2 transformedCloud;
-        geometry_msgs::TransformStamped transform = 
+        // Add valid points to the cloud
+        pcl::PointXYZI point;
+        point.x = x;
+        point.y = y;
+        point.z = 0.0;  // LaserScan is 2D
+        point.intensity = intensity;
+
+        pclCloud.points.push_back(point);
+    }
+
+    // Transform the cloud to the desired frame
+        geometry_msgs::TransformStamped transform =
             m_tfBuffer.lookupTransform(m_frameId, scanMsg->header.frame_id, scanMsg->header.stamp);
-        tf2::doTransform(cloud, transformedCloud, transform);
+        
+        // Use Eigen for transformation matrix
+        Eigen::Matrix4f transformMatrix;
+        pcl_ros::transformAsMatrix(transform.transform, transformMatrix);
 
-        // Convert to PCL for further processing
-        pcl::PointCloud<pcl::PointXYZI> pclCloud;
-        pcl::fromROSMsg(transformedCloud, pclCloud);
+        // Apply transformation
+        pcl::PointCloud<pcl::PointXYZI> transformedCloud;
+        pcl::transformPointCloud(pclCloud, transformedCloud, transformMatrix);
 
         // Merge with the combined cloud
-        m_combinedCloud += pclCloud;
-
-    } catch (tf2::TransformException& ex) {
-        ROS_WARN_THROTTLE(1.0, "Transform error: %s", ex.what());
-    }
+        m_combinedCloud += transformedCloud;
 }
+
 
 /**
  * @brief Publishes the merged point cloud and laser scan to respective topics.
@@ -181,36 +189,53 @@ void LaserScanMerger::publishMergedData() {
 
 void LaserScanMerger::convertPointCloudToLaserScan(
     const pcl::PointCloud<pcl::PointXYZI>& cloud, sensor_msgs::LaserScan& scan) {
+
+    // Initialize LaserScan parameters
     scan.header.frame_id = m_frameId;
     scan.header.stamp = ros::Time(cloud.header.stamp);
     scan.angle_min = m_angleMin;
     scan.angle_max = m_angleMax;
-
-    // Angle increment based on the total range and the number of points
     scan.angle_increment = (m_angleMax - m_angleMin) / static_cast<float>(cloud.width);
-    scan.range_min = 0.1;
-    scan.range_max = m_rangeLimit;
-    scan.ranges.resize(cloud.width, std::numeric_limits<float>::infinity());
+    scan.range_min = 0.1;  // Minimum valid range
+    scan.range_max = m_rangeLimit;  // Maximum valid range
 
-    for (const auto& point : cloud) {
-        double angle = atan2(point.y, point.x); // Angle in radians
+    // Pre-allocate memory for ranges
+    uint32_t ranges_size = std::ceil((scan.angle_max - scan.angle_min) / scan.angle_increment);
+    scan.ranges.assign(ranges_size, std::numeric_limits<float>::infinity());
 
-        if (angle < m_angleMin || angle > m_angleMax) {
-            continue; // Skip points outside the scan range
+    // Use Eigen for efficient matrix/vector operations
+    Eigen::VectorXf x_vals(cloud.size()), y_vals(cloud.size());
+    for (size_t i = 0; i < cloud.size(); ++i) {
+        x_vals(i) = cloud[i].x;
+        y_vals(i) = cloud[i].y;
+    }
+
+    // Vectorized range and angle computations
+    Eigen::VectorXf ranges = (x_vals.array().square() + y_vals.array().square()).sqrt();
+    Eigen::VectorXf angles = y_vals.array().binaryExpr(x_vals.array(), [](float y, float x) {
+        return std::atan2(y, x);
+    });
+
+    for (int i = 0; i < angles.size(); ++i) {
+        float range = ranges(i);
+        float angle = angles(i);
+
+        // Skip invalid points
+        if (std::isnan(range) || range < scan.range_min || range > scan.range_max) {
+            continue;
         }
 
-        double range = hypot(point.x, point.y); // Calculate range from point cloud
-
-        if (range < scan.range_min || range > scan.range_max) {
-            continue; // Skip points outside of the valid range
+        // Angle-based filtering
+        if (angle < scan.angle_min || angle > scan.angle_max) {
+            continue;
         }
 
-        // Calculate the index for this point's range based on its angle
-        int index = static_cast<int>((angle - m_angleMin) / scan.angle_increment);
+        // Compute index based on angle
+        int index = static_cast<int>((angle - scan.angle_min) / scan.angle_increment);
 
-        // Ensure the index is within bounds
-        if (index >= 0 && index < scan.ranges.size()) {
-            scan.ranges[index] = std::min(scan.ranges[index], static_cast<float>(range));
+        // Update range if this point is closer
+        if (index >= 0 && index < scan.ranges.size() && range < scan.ranges[index]) {
+            scan.ranges[index] = range;
         }
     }
 }
@@ -236,7 +261,7 @@ void LaserScanMerger::dynamicReconfigCallback(laser_scan_merger::ScanMergerConfi
  */
 
 void LaserScanMerger::spin() {
-    ros::Rate rate(10);
+    ros::Rate rate(120);
     while (ros::ok()) {
         publishMergedData();
         ros::spinOnce();
